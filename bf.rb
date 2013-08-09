@@ -1,33 +1,49 @@
-require 'pry'
-
 class UnblancedBracketError < StandardError; end
 class InvalidCommandError < StandardError; end
 
 class BrainFck
 
+  # Brainfuck as a language basically implements a Turing machine. You have
+  # a tape (array) and a tape pointer, and all you do is wander around said
+  # tape and increment or decrement values on said tape. My tape is made up of
+  # bytes initialized to zero. Note that the byte values will overflow and
+  # underflow.
+  #
+  # What's really wild about Brainfuck is that it's Turing complete. I'm still
+  # waiting on a web framework written in it.
+  #
+  # @program:           the program string ingested from ARGF
+  # @program_length:    the length of the program in bytes
+  # @program_index:     the index of the current instruction being evaluated
+  #
+  # @tape:              the tape on which bytes are stored, our program's memory
+  # @tape_index:        the specific byte on the tape currently pointed at
+  #
+  # @loop_stack:        a stack that holds the index of opening brackets. this
+  #                     makes jumping back to the top of a loop easy
+
   def initialize input_string
     @program = input_string.gsub(/[\n\r\t ]/, '')
-    @program_index = 0
+    @program_length = @program.length - 1
+    @program_index = -1
+    @tape = [Byte.new(0)]
     @tape_index = 0
-    @tape = []
     @loop_stack = []
-    @function_mapping = {
-      '>' => Proc.new { increment_pointer },
-      '<' => Proc.new { decrement_pointer },
-      '+' => Proc.new { increment },
-      '-' => Proc.new { decrement },
-      '.' => Proc.new { write },
-      ',' => Proc.new { read },
-      '[' => Proc.new { jump },
-      ']' => Proc.new { retreat },
-    }
-    @function_mapping.default = Proc.new { raise invalid_character }
   end
 
   def run
-    while @program_index < @program.length
-      @function_mapping[@program[@program_index]].call
-      @program_index += 1
+    while @program_index < @program_length
+      case @program[@program_index += 1]
+        when '>' then increment_pointer
+        when '<' then decrement_pointer
+        when '+' then increment
+        when '-' then decrement
+        when '.' then write
+        when ',' then read
+        when '[' then jump
+        when ']' then retreat
+        else raise invalid_character
+      end
     end
   end
 
@@ -35,63 +51,59 @@ class BrainFck
 
   def increment_pointer
     @tape_index += 1
+    @tape[@tape_index] = Byte.new(0) unless @tape[@tape_index]
   end
 
   def decrement_pointer
     @tape_index -= 1
+    @tape[@tape_index] = Byte.new(0) unless @tape[@tape_index]
   end
 
   def increment
-    @tape[@tape_index] = (@tape[@tape_index] || Byte.new(0)) + 1
+    @tape[@tape_index] += 1
   end
 
   def decrement
-    @tape[@tape_index] = (@tape[@tape_index] || Byte.new(0)) - 1
+    @tape[@tape_index] -= 1
   end
 
   def write
-    puts @tape[@tape_index].chr
+    print @tape[@tape_index].chr
   end
 
   def read
-    print "> "
+    print "\n> "
     @tape[@tape_index] = Byte.new(STDIN.getc.ord)
   end
 
   def jump
-    if is_false?
-      @program_index = next_brace
-    else
-      @loop_stack.push(@program_index)
-    end
+    @tape[@tape_index] == 0 ? @program_index = closing_brace : @loop_stack.push(@program_index)
   end
 
   def retreat
-    if is_false?
+    if @tape[@tape_index] == 0
       @loop_stack.pop
     else
-      raise unbalanced_bracket if @loop_stack.empty?
       @program_index = @loop_stack.last
+      raise unbalanced_bracket unless @program_index
     end
   end
 
-  def next_brace
+  def closing_brace
     count = 0
     index = 0
-    @program[(@program_index + 1)..-1].each_char do |cha|
+    @program[(@program_index + 1)..-1].each_char do |c|
       index += 1
-      if cha == '['
+      if c == '['
         count += 1
-      elsif cha == ']' && count == 0
+      elsif c == ']' && count == 0
         return @program_index + index
-      elsif cha == ']'
+      elsif c == ']'
         count -= 1
       end
     end
-  end
 
-  def is_false?
-    @tape[@tape_index] == 0 || @tape[@tape_index] == nil
+    raise unbalanced_bracket
   end
 
   def invalid_character
