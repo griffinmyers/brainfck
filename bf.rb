@@ -33,7 +33,7 @@ class BrainFck
 
   def run
     while @program_index < @program_length
-      case @program[@program_index += 1]
+      case @program[@program_index += 1].chr
         when '>' then increment_pointer
         when '<' then decrement_pointer
         when '+' then increment
@@ -45,18 +45,19 @@ class BrainFck
         else raise invalid_character
       end
     end
+    print "\n"
   end
 
   private
 
   def increment_pointer
     @tape_index += 1
-    @tape[@tape_index] = Byte.new(0) unless @tape[@tape_index]
+    @tape[@tape_index] ||= Byte.new(0)
   end
 
   def decrement_pointer
     @tape_index -= 1
-    @tape[@tape_index] = Byte.new(0) unless @tape[@tape_index]
+    @tape[@tape_index] ||= Byte.new(0)
   end
 
   def increment
