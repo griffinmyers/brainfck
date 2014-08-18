@@ -28,7 +28,7 @@ class BrainFck
     @tape = [Byte.new(0)]
     @tape_index = 0
     @loop_map = {}
-    match_brackets()
+    match_braces()
   end
 
   def run
@@ -50,7 +50,7 @@ class BrainFck
 
   private
 
-  def match_brackets
+  def match_braces
     opening_stack = []
     index = 0
     @program.each_char do |c|
