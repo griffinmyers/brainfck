@@ -1,4 +1,3 @@
-class UnblancedBracketError < StandardError; end
 class InvalidCommandError < StandardError; end
 
 class BrainFck
@@ -19,16 +18,17 @@ class BrainFck
   # @tape:              the tape on which bytes are stored, our program's memory
   # @tape_index:        the specific byte on the tape currently pointed at
   #
-  # @loop_stack:        a stack that holds the index of opening brackets. this
-  #                     makes jumping back to the top of a loop easy
-
+  # @loop_map:          a hash whose key is the index of a brace and whose value
+  #                     is the matching brace, be it opening or closing.
+  #
   def initialize input_string
     @program = input_string.gsub(/[\n\r\t ]/, '')
     @program_length = @program.length - 1
     @program_index = -1
     @tape = [Byte.new(0)]
     @tape_index = 0
-    @loop_stack = []
+    @loop_map = {}
+    match_brackets()
   end
 
   def run
@@ -49,6 +49,21 @@ class BrainFck
   end
 
   private
+
+  def match_brackets
+    opening_stack = []
+    index = 0
+    @program.each_char do |c|
+      if c == '['
+        opening_stack.push(index)
+      elsif c == ']'
+        opening_brace = opening_stack.pop
+        @loop_map[index] = opening_brace
+        @loop_map[opening_brace] = index
+      end
+      index += 1
+    end
+  end
 
   def increment_pointer
     @tape_index += 1
@@ -78,41 +93,19 @@ class BrainFck
   end
 
   def jump
-    @tape[@tape_index] == 0 ? @program_index = closing_brace : @loop_stack.push(@program_index)
+    if @tape[@tape_index] == 0
+      @program_index = @loop_map[@program_index]
+    end
   end
 
   def retreat
-    if @tape[@tape_index] == 0
-      @loop_stack.pop
-    else
-      @program_index = @loop_stack.last
-      raise unbalanced_bracket unless @program_index
+    if @tape[@tape_index] != 0
+      @program_index = @loop_map[@program_index]
     end
-  end
-
-  def closing_brace
-    count = 0
-    index = 0
-    @program[(@program_index + 1)..-1].each_char do |c|
-      index += 1
-      if c == '['
-        count += 1
-      elsif c == ']' && count == 0
-        return @program_index + index
-      elsif c == ']'
-        count -= 1
-      end
-    end
-
-    raise unbalanced_bracket
   end
 
   def invalid_character
     InvalidCommandError.new("Invalid Command #{@program[@program_index]} at #{@program_index}")
-  end
-
-  def unbalanced_bracket
-    UnblancedBracketError.new("Unmatched ] bracket at column #{@program_index}")
   end
 end
 
